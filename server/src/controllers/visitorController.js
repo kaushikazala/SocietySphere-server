@@ -1,4 +1,4 @@
-const Visitor = require("../models/Visitor");
+const Visitor = require("../module/Visitor");
 const { generateVisitorQR } = require("../utils/qr");
 const { toUser } = require("../utils/socket");
 
@@ -130,7 +130,7 @@ exports.approveWalkIn = async (req, res, next) => {
 exports.walkIn = async (req, res, next) => {
   try {
     const { name, phone, purpose, vehicleNumber, hostFlatNumber } = req.body;
-    const User = require("../models/User");
+    const User = require("../module/User");
 
     // Find host by flatNumber in same society
     const host = await User.findOne({

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { protect, authorize, sameSociety } = require("../middleware/auth");
+const { protect, authorize, sameSociety } = require("../middlewares/auth");
 const ctrl = require("../controllers/societyController");
 
 router.get("/code/:code", ctrl.getSocietyByCode); // public — used during signup

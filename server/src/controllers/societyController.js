@@ -1,5 +1,5 @@
-const Society = require("../models/Society");
-const User = require("../models/User");
+const Society = require("../module/Society");
+const User = require("../module/User");
 
 // ── POST /api/societies ───────────────────────────────────────────────────────
 exports.createSociety = async (req, res, next) => {

@@ -1,4 +1,4 @@
-const Document = require("../models/Document");
+const Document = require("../module/Document");
 const { makeUploader } = require("../config/cloudinary");
 
 const uploader = makeUploader("documents", ["pdf", "doc", "docx", "jpg", "png", "xlsx"]);

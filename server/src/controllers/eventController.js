@@ -1,4 +1,4 @@
-const Event = require("../models/Event");
+const Event = require("../module/Event");
 const { toSociety } = require("../utils/socket");
 
 exports.createEvent = async (req, res, next) => {

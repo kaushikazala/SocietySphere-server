@@ -1,5 +1,5 @@
-const EmergencyAlert = require("../models/EmergencyAlert");
-const User = require("../models/User");
+const Emergency = require("../module/Emergency");
+const User = require("../module/User");
 const { toSociety, toUser } = require("../utils/socket");
 const { sendEmergencyAlert } = require("../utils/mailer");
 

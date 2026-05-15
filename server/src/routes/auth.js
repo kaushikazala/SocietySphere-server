@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const rateLimit = require("express-rate-limit");
-const { protect } = require("../middleware/auth");
+const { protect } = require("../middlewares/auth");
 const ctrl = require("../controllers/authController");
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });

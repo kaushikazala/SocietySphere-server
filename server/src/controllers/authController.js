@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const User = require("../models/User");
-const Society = require("../models/Society");
+const User = require("../module/User");
+const Society = require("../module/Society");
 const { sendTokens, signAccess, hashToken, compareToken } = require("../utils/tokens");
 const { generateOtp, storeOtp, verifyOtp } = require("../utils/otp");
 const { sendOtp, sendWelcome } = require("../utils/mailer");

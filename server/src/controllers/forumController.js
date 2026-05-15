@@ -1,4 +1,4 @@
-const ForumPost = require("../models/ForumPost");
+const ForumPost = require("../module/ForumPost");
 
 exports.getPosts = async (req, res, next) => {
   try {

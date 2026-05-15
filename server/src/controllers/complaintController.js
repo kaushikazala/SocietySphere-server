@@ -1,4 +1,4 @@
-const Complaint = require("../models/Complaint");
+const Complaint = require("../module/Complaint");
 const { toUser, toSociety } = require("../utils/socket");
 
 // ── POST /api/complaints ──────────────────────────────────────────────────────

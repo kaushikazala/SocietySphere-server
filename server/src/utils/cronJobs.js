@@ -2,10 +2,10 @@ const cron = require('node-cron');
 const mongoose = require('mongoose');
 
 // Import models
-const MaintenanceBill = require('../module/Maintenancebill model');
-const Notice = require('../module/Notice model');
-const Event = require('../module/Event model');
-const EmergencyAlert = require('../module/Emergencyalert model');
+const MaintenanceBill = require('../module/MaintenanceBill');
+const Notice = require('../module/Notice');
+const Event = require('../module/Event');
+const Emergency = require('../module/Emergency');
 
 // Import socket utility
 const { toSociety } = require('./socket');
@@ -16,12 +16,12 @@ const generateMonthlyBills = async () => {
     console.log('Running monthly maintenance bill generation...');
 
     // Get all societies
-    const Society = require('../module/Society model');
+    const Society = require('../module/Society');
     const societies = await Society.find({});
 
     for (const society of societies) {
       // Get all users in the society
-      const User = require('../module/User model');
+      const User = require('../module/User');
       const users = await User.find({ society: society._id });
 
       // Calculate maintenance amount (you can customize this logic)
@@ -147,7 +147,7 @@ const broadcastEmergencyAlerts = async () => {
   try {
     console.log('Broadcasting active emergency alerts...');
 
-    const activeAlerts = await EmergencyAlert.find({
+    const activeAlerts = await Emergency.find({
       status: 'active',
       createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
     }).populate('society');

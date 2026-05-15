@@ -1,6 +1,6 @@
-const MaintenanceBill = require("../models/MaintenanceBill");
-const User = require("../models/User");
-const Society = require("../models/Society");
+const MaintenanceBill = require("../module/MaintenanceBill");
+const User = require("../module/User");
+const Society = require("../module/Society");
 const { toSociety, toUser } = require("../utils/socket");
 const { sendMaintenanceInvoice } = require("../utils/mailer");
 
