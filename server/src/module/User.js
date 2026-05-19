@@ -60,10 +60,9 @@ userSchema.index({ society: 1, role: 1 });
 userSchema.index({ society: 1, flatNumber: 1, wing: 1 });
 
 // ── Pre-save: hash password ───────────────────────────────────────────────────
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 // ── Instance: compare password ────────────────────────────────────────────────

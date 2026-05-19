@@ -5,6 +5,15 @@ const http = require("http");
 const socketIo = require("socket.io");
 require("dotenv").config();
 
+const requiredEnv = ["MONGODB_URI", "JWT_SECRET", "JWT_REFRESH_SECRET"];
+const missingEnv = requiredEnv.filter((key) => !process.env[key]);
+if (missingEnv.length) {
+  throw new Error(
+    `Missing required environment variables: ${missingEnv.join(", ")}. ` +
+      `Create a .env file or set these variables before starting the server.`
+  );
+}
+
 const app = express();
 const server = http.createServer(app);
 

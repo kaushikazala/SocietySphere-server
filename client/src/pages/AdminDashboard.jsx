@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import { COLORS, FONTS } from "../theme";
 import { Card, Button, Badge, Input } from "../components/Common";
 
 const AdminDashboard = ({ user }) => {
+  const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState({
     totalResidents: 0,
@@ -11,6 +14,12 @@ const AdminDashboard = ({ user }) => {
     parkingSlots: "0/0",
   });
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/auth?mode=login");
+  };
 
   useEffect(() => {
     fetchStats();
@@ -55,21 +64,34 @@ const AdminDashboard = ({ user }) => {
 
   return (
     <div style={{ padding: "32px" }}>
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontFamily: FONTS.serif,
-            fontSize: "32px",
-            fontWeight: 700,
-            color: COLORS.text,
-            marginBottom: "8px",
-          }}
-        >
-          Admin Dashboard
-        </h1>
-        <p style={{ fontSize: "14px", color: COLORS.muted }}>
-          Manage {user?.societyName || "your society"}
-        </p>
+      <div
+        style={{
+          marginBottom: "32px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "16px",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontFamily: FONTS.serif,
+              fontSize: "32px",
+              fontWeight: 700,
+              color: COLORS.text,
+              marginBottom: "8px",
+            }}
+          >
+            Admin Dashboard
+          </h1>
+          <p style={{ fontSize: "14px", color: COLORS.muted }}>
+            Manage {user?.societyName || "your society"}
+          </p>
+        </div>
+        <Button variant="secondary" size="md" onClick={handleLogout}>
+          Logout
+        </Button>
       </div>
 
       {/* KPI Cards */}
@@ -108,9 +130,9 @@ const AdminDashboard = ({ user }) => {
             <p style={{ color: COLORS.muted, marginBottom: "16px" }}>
               As a super admin, you can create societies for management.
             </p>
-            <Button onClick={() => alert("Society creation form coming soon!")}>
-              Create Society
-            </Button>
+                <Button onClick={() => navigate('/societies/new') }>
+                  Create Society
+                </Button>
           </Card>
         </div>
       )}

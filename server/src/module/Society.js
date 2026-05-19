@@ -46,15 +46,12 @@ const societySchema = new mongoose.Schema(
 );
 
 // ── Auto-generate society code before save ────────────────────────────────────
-societySchema.pre("save", function (next) {
+societySchema.pre("save", function () {
   if (!this.code) {
-    const slug = this.address.city.slice(0, 4).toUpperCase();
+    const slug = (this.address?.city || "XXXX").slice(0, 4).toUpperCase();
     const uid = uuidv4().split("-")[0].toUpperCase();
     this.code = `SSP-${slug}-${uid}`;
   }
-  next();
 });
-
-societySchema.index({ code: 1 });
 
 module.exports = mongoose.model("Society", societySchema);

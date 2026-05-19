@@ -1,10 +1,39 @@
+const mongoose = require("mongoose");
 const Society = require("../module/Society");
 const User = require("../module/User");
 
 // ── POST /api/societies ───────────────────────────────────────────────────────
 exports.createSociety = async (req, res, next) => {
   try {
-    const society = await Society.create({ ...req.body, createdBy: req.user._id });
+    const { name, address, totalUnits } = req.body;
+    if (!name || !address || typeof address !== "object") {
+      return res.status(400).json({ success: false, message: "Society name and address are required" });
+    }
+    if (!address.city || !address.state) {
+      return res.status(400).json({
+        success: false,
+        message: "Society address must include city and state",
+      });
+    }
+    if (!totalUnits || Number(totalUnits) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Total units must be a positive number",
+      });
+    }
+
+    const society = await Society.create({
+      name,
+      address: {
+        line1: address.line1 || "",
+        city: address.city,
+        state: address.state,
+        pincode: address.pincode || "",
+      },
+      totalUnits: Number(totalUnits),
+      createdBy: req.user._id,
+    });
+
     // Attach admin to society
     await User.findByIdAndUpdate(req.user._id, { society: society._id, role: "admin" });
     res.status(201).json({ success: true, society });
@@ -41,19 +70,27 @@ exports.updateSociety = async (req, res, next) => {
 // ── GET /api/societies/:id/members ────────────────────────────────────────────
 exports.getMembers = async (req, res, next) => {
   try {
+    const societyId = req.params.id;
+    if (!societyId || !mongoose.Types.ObjectId.isValid(societyId)) {
+      return res.status(400).json({ success: false, message: "Invalid society id" });
+    }
+
     const { role, wing, page = 1, limit = 20 } = req.query;
-    const filter = { society: req.params.id };
+    const filter = { society: societyId };
     if (role) filter.role = role;
     if (wing) filter.wing = wing;
+
+    const pageNumber = Number(page) || 1;
+    const limitNumber = Number(limit) || 20;
 
     const total = await User.countDocuments(filter);
     const members = await User.find(filter)
       .select("-password -refreshTokenHash -passwordResetToken")
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber)
       .sort("name");
 
-    res.json({ success: true, total, page: Number(page), members });
+    res.json({ success: true, total, page: pageNumber, members });
   } catch (err) {
     next(err);
   }
@@ -62,12 +99,17 @@ exports.getMembers = async (req, res, next) => {
 // ── PATCH /api/societies/:id/members/:userId ──────────────────────────────────
 exports.updateMember = async (req, res, next) => {
   try {
+    const societyId = req.params.id;
+    if (!societyId || !mongoose.Types.ObjectId.isValid(societyId)) {
+      return res.status(400).json({ success: false, message: "Invalid society id" });
+    }
+
     const allowed = ["flatNumber", "wing", "role", "isActive", "vehicles", "familyMembers"];
     const updates = {};
     allowed.forEach((f) => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
 
     const user = await User.findOneAndUpdate(
-      { _id: req.params.userId, society: req.params.id },
+      { _id: req.params.userId, society: societyId },
       updates,
       { new: true, runValidators: true }
     );

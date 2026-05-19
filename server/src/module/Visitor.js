@@ -50,7 +50,6 @@ visitorSchema.pre("save", function (next) {
 });
 
 visitorSchema.index({ society: 1, status: 1 });
-visitorSchema.index({ qrToken: 1 });
 visitorSchema.index({ host: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Visitor", visitorSchema);

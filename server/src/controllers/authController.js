@@ -17,11 +17,14 @@ exports.register = async (req, res, next) => {
     // Resolve society
     let society = null;
     if (role === "admin") {
-      // Admin creates society separately — societyId must be provided
-      society = await Society.findById(societyId);
-      if (!society) return res.status(400).json({ success: false, message: "Society not found" });
+      // Admin joins an existing society via society code
+      if (!societyCode)
+        return res.status(400).json({ success: false, message: "Society code required" });
+      society = await Society.findOne({ code: societyCode.toUpperCase() });
+      if (!society)
+        return res.status(400).json({ success: false, message: "Invalid society code" });
     } else if (role !== "super_admin") {
-      // All other roles join via society code
+      // Other non-super-admin roles join via society code
       if (!societyCode)
         return res.status(400).json({ success: false, message: "Society code required" });
       society = await Society.findOne({ code: societyCode.toUpperCase() });
@@ -61,7 +64,7 @@ exports.login = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Account deactivated" });
 
     // Optional: role mismatch guard
-    if (role && user.role !== role && user.role !== "super_admin")
+    if (role && user.role !== role)
       return res.status(403).json({ success: false, message: "Role mismatch" });
 
     await sendTokens(user, 200, res);

@@ -26,6 +26,8 @@ exports.protect = async (req, res, next) => {
 
 // ── Role gate ────────────────────────────────────────────────────────────────
 exports.authorize = (...roles) => (req, res, next) => {
+  if (!req.user)
+    return res.status(401).json({ success: false, message: "Unauthorized" });
   if (!roles.includes(req.user.role))
     return res.status(403).json({
       success: false,
@@ -35,9 +37,12 @@ exports.authorize = (...roles) => (req, res, next) => {
 };
 
 // ── Same-society gate ─────────────────────────────────────────────────────────
-// Ensures req.user belongs to the society referenced in req.params.societyId
+// Ensures req.user belongs to the society referenced in req.params.id or req.body.society
 exports.sameSociety = (req, res, next) => {
-  const societyId = req.params.societyId || req.body.society;
+  if (!req.user)
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+
+  const societyId = req.params.societyId || req.params.id || req.body.society;
   if (
     req.user.role !== "super_admin" &&
     req.user.society?.toString() !== societyId?.toString()

@@ -1,13 +1,21 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
+const getJwtSecret = (name) => {
+  const secret = process.env[name];
+  if (!secret) {
+    throw new Error(`Environment variable ${name} is required for JWT signing`);
+  }
+  return secret;
+};
+
 const signAccess = (userId) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+  jwt.sign({ id: userId }, getJwtSecret("JWT_SECRET"), {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 
 const signRefresh = (userId) =>
-  jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
+  jwt.sign({ id: userId }, getJwtSecret("JWT_REFRESH_SECRET"), {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
   });
 
@@ -25,6 +33,7 @@ const sendTokens = async (user, statusCode, res) => {
 
   res.status(statusCode).json({
     success: true,
+    token: accessToken,
     accessToken,
     refreshToken,
     user: user.toPublic(),

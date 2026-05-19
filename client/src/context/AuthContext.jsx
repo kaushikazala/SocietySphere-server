@@ -3,7 +3,16 @@ import React, { createContext, useState, useCallback } from "react";
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const initialUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch (error) {
+      console.error("Failed to parse stored user", error);
+      return null;
+    }
+  })();
+
+  const [user, setUser] = useState(initialUser);
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [loading, setLoading] = useState(false);
 
@@ -43,6 +52,24 @@ export const AuthProvider = ({ children }) => {
       throw error;
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/me", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      const data = await parseResponse(response);
+      if (response.ok && data?.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        return data.user;
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+      return null;
     }
   }, []);
 
@@ -86,6 +113,7 @@ export const AuthProvider = ({ children }) => {
     token,
     loading,
     login,
+    refreshUser,
     signup,
     logout,
     isAuthenticated: !!token,

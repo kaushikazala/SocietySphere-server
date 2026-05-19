@@ -10,6 +10,8 @@ import AuthPage from "./pages/Auth";
 import ResidentDashboard from "./pages/ResidentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import GuardDashboard from "./pages/GuardDashboard";
+import MaintenanceDashboard from "./pages/MaintenanceDashboard";
+import CreateSociety from "./pages/CreateSociety";
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -26,6 +28,7 @@ const DashboardRouter = () => {
     case "admin":
       return <AdminDashboard user={user} />;
     case "maintenance":
+      return <MaintenanceDashboard user={user} />;
     case "resident":
       return <ResidentDashboard user={user} />;
     case "guard":
@@ -47,6 +50,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardRouter />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/societies/new"
+            element={
+              <ProtectedRoute>
+                <CreateSociety />
               </ProtectedRoute>
             }
           />

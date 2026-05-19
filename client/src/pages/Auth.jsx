@@ -58,6 +58,10 @@ const AuthPage = () => {
       setErrors({ phone: "Enter a valid phone number" });
       return;
     }
+    if (["admin", "resident", "guard", "maintenance"].includes(role) && !signupForm.societyCode.trim()) {
+      setErrors({ societyCode: "Society code is required for your role" });
+      return;
+    }
     setStep(2);
   };
 
@@ -77,7 +81,7 @@ const AuthPage = () => {
         name: signupForm.name,
         email: signupForm.email,
         phone: signupForm.phone,
-        societyCode: (role === "resident" || role === "guard" || role === "maintenance") ? signupForm.societyCode : null,
+        societyCode: (["admin", "resident", "guard", "maintenance"].includes(role)) ? signupForm.societyCode : null,
         password: signupForm.password,
         role,
       });
@@ -420,18 +424,8 @@ const AuthPage = () => {
                     setSignupForm({ ...signupForm, phone: e.target.value })
                   }
                   error={errors.phone}
-                  style={{ marginBottom: "18px" }}
                 />
-                <Button
-                  variant="primary"
-                  style={{ width: "100%", padding: "12px" }}
-                >
-                  Continue →
-                </Button>
-              </>
-            ) : (
-              <>
-                {(role === "resident" || role === "guard" || role === "maintenance") && (
+                {(["admin", "resident", "guard", "maintenance"].includes(role)) && (
                   <Input
                     label="Society Code"
                     type="text"
@@ -443,8 +437,19 @@ const AuthPage = () => {
                         societyCode: e.target.value,
                       })
                     }
+                    error={errors.societyCode}
+                    style={{ marginBottom: "18px" }}
                   />
                 )}
+                <Button
+                  variant="primary"
+                  style={{ width: "100%", padding: "12px" }}
+                >
+                  Continue →
+                </Button>
+              </>
+            ) : (
+              <>
                 <Input
                   label="Password"
                   type="password"

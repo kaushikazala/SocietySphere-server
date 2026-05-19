@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import { COLORS, FONTS } from "../theme";
 import { Card, Button, Badge, Input } from "../components/Common";
 
 const ResidentDashboard = ({ user }) => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState({
     dueAmount: 0,
@@ -11,6 +15,11 @@ const ResidentDashboard = ({ user }) => {
     newNotices: 0,
   });
   const [loading, setLoading] = useState(true);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/auth?mode=login");
+  };
 
   useEffect(() => {
     fetchStats();
@@ -56,21 +65,34 @@ const ResidentDashboard = ({ user }) => {
 
   return (
     <div style={{ padding: "32px" }}>
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontFamily: FONTS.serif,
-            fontSize: "32px",
-            fontWeight: 700,
-            color: COLORS.text,
-            marginBottom: "8px",
-          }}
-        >
-          Welcome back, {user?.name || "Resident"}
-        </h1>
-        <p style={{ fontSize: "14px", color: COLORS.muted }}>
-          Here's your society overview
-        </p>
+      <div
+        style={{
+          marginBottom: "32px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "16px",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontFamily: FONTS.serif,
+              fontSize: "32px",
+              fontWeight: 700,
+              color: COLORS.text,
+              marginBottom: "8px",
+            }}
+          >
+            Welcome back, {user?.name || "Resident"}
+          </h1>
+          <p style={{ fontSize: "14px", color: COLORS.muted }}>
+            Here's your society overview
+          </p>
+        </div>
+        <Button variant="secondary" size="md" onClick={handleLogout}>
+          Logout
+        </Button>
       </div>
 
       {/* Quick Stats */}

@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import { COLORS, FONTS } from "../theme";
 import { Card, Button, Badge, Input } from "../components/Common";
 
 const GuardDashboard = ({ user }) => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState({
     visitorsToday: 0,
@@ -11,6 +15,11 @@ const GuardDashboard = ({ user }) => {
     rejected: 0,
   });
   const [loading, setLoading] = useState(true);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/auth?mode=login");
+  };
 
   useEffect(() => {
     fetchStats();
@@ -47,21 +56,33 @@ const GuardDashboard = ({ user }) => {
 
   return (
     <div style={{ padding: "32px" }}>
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontFamily: FONTS.serif,
-            fontSize: "32px",
-            fontWeight: 700,
-            color: COLORS.text,
-            marginBottom: "8px",
-          }}
-        >
-          Gate Management
-        </h1>
-        <p style={{ fontSize: "14px", color: COLORS.muted }}>
-          Visitor tracking and entry management
-        </p>
+      <div
+        style={{
+          marginBottom: "32px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontFamily: FONTS.serif,
+              fontSize: "32px",
+              fontWeight: 700,
+              color: COLORS.text,
+              marginBottom: "8px",
+            }}
+          >
+            Gate Management
+          </h1>
+          <p style={{ fontSize: "14px", color: COLORS.muted }}>
+            Visitor tracking and entry management
+          </p>
+        </div>
+        <Button variant="secondary" size="md" onClick={handleLogout}>
+          Logout
+        </Button>
       </div>
 
       {/* Quick Stats */}
