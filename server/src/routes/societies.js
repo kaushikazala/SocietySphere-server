@@ -7,8 +7,14 @@ router.get("/code/:code", ctrl.getSocietyByCode); // public — used during sign
 
 router.use(protect);
 
-router.post("/", authorize("super_admin", "admin"), ctrl.createSociety);
-router.get("/:id", ctrl.getSociety);
+router.get("/", authorize("super_admin", "admin"), ctrl.listSocieties);
+router.post("/", authorize("super_admin"), ctrl.createSociety);
+router.get(
+  "/:id",
+  authorize("super_admin", "admin", "resident", "guard", "maintenance"),
+  sameSociety,
+  ctrl.getSociety
+);
 router.patch("/:id", authorize("super_admin", "admin"), sameSociety, ctrl.updateSociety);
 
 router.get("/:id/members", authorize("super_admin", "admin"), sameSociety, ctrl.getMembers);

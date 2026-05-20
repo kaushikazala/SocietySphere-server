@@ -11,7 +11,7 @@ exports.protect = async (req, res, next) => {
     const token = auth.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.id).select("+refreshTokenHash");
+    const user = await User.findById(decoded.id).populate("society").select("+refreshTokenHash");
     if (!user || !user.isActive)
       return res.status(401).json({ success: false, message: "Account not found or deactivated" });
 

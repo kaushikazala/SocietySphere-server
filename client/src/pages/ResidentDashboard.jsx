@@ -95,6 +95,57 @@ const ResidentDashboard = ({ user }) => {
         </Button>
       </div>
 
+      {user?.society && (
+        <Card style={{ padding: "20px", marginBottom: "24px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto",
+              gap: "20px",
+              alignItems: "center",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: COLORS.muted,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  marginBottom: "8px",
+                }}
+              >
+                Current Society
+              </div>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: COLORS.text }}>
+                {user.society?.name || user.society}
+              </div>
+              <div style={{ fontSize: "13px", color: COLORS.muted, marginTop: "6px" }}>
+                {user.society?.address?.city && user.society?.address?.state
+                  ? `${user.society.address.city}, ${user.society.address.state}`
+                  : ""}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: COLORS.muted,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  marginBottom: "8px",
+                }}
+              >
+                Society Code
+              </div>
+              <div style={{ fontSize: "20px", fontWeight: 700, color: COLORS.jade }}>
+                {user.society?.code || "—"}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Quick Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "32px" }}>
         {[

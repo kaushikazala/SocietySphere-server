@@ -32,7 +32,7 @@ exports.register = async (req, res, next) => {
         return res.status(400).json({ success: false, message: "Invalid society code" });
     }
 
-    const user = await User.create({
+    let user = await User.create({
       name,
       email,
       phone,
@@ -41,7 +41,10 @@ exports.register = async (req, res, next) => {
       society: society?._id,
     });
 
-    if (society) sendWelcome(email, name, society.name).catch(() => {});
+    if (society) {
+      await user.populate("society");
+      sendWelcome(email, name, society.name).catch(() => {});
+    }
 
     await sendTokens(user, 201, res);
   } catch (err) {
@@ -62,6 +65,8 @@ exports.login = async (req, res, next) => {
 
     if (!user.isActive)
       return res.status(403).json({ success: false, message: "Account deactivated" });
+
+    await user.populate("society");
 
     // Optional: role mismatch guard
     if (role && user.role !== role)

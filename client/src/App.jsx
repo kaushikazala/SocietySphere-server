@@ -13,9 +13,11 @@ import GuardDashboard from "./pages/GuardDashboard";
 import MaintenanceDashboard from "./pages/MaintenanceDashboard";
 import CreateSociety from "./pages/CreateSociety";
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? children : <Navigate to="/auth?mode=login" />;
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/auth?mode=login" />;
+  if (allowedRoles && (!user || !allowedRoles.includes(user.role))) return <Navigate to="/dashboard" />;
+  return children;
 };
 
 const DashboardRouter = () => {
@@ -56,7 +58,7 @@ function App() {
           <Route
             path="/societies/new"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["super_admin"]}>
                 <CreateSociety />
               </ProtectedRoute>
             }

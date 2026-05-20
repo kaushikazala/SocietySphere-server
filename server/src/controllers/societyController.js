@@ -67,6 +67,28 @@ exports.updateSociety = async (req, res, next) => {
   }
 };
 
+// ── GET /api/societies ───────────────────────────────────────────────────────
+exports.listSocieties = async (req, res, next) => {
+  try {
+    const filter = {};
+    if (req.user.role === "admin") {
+      const societyId = req.user.society?._id || req.user.society;
+      if (!societyId) {
+        return res.status(400).json({ success: false, message: "Admin is not assigned to a society" });
+      }
+      filter._id = societyId;
+    }
+
+    const societies = await Society.find(filter)
+      .select("name code totalUnits isActive address createdBy")
+      .populate("createdBy", "name email");
+
+    res.json({ success: true, societies });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ── GET /api/societies/:id/members ────────────────────────────────────────────
 exports.getMembers = async (req, res, next) => {
   try {
