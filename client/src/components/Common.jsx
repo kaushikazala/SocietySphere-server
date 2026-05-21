@@ -185,7 +185,9 @@ export const Badge = ({ children, color = "jade", style }) => {
   const colors = {
     jade: { bg: COLORS.jadedim, border: "rgba(34,217,160,0.25)", text: COLORS.jade },
     gold: { bg: COLORS.golddim, border: "rgba(232,166,76,0.25)", text: COLORS.gold },
+    ghost: { bg: COLORS.surface, border: COLORS.border, text: COLORS.muted },
   };
+  const badgeStyle = colors[color] || colors.jade;
 
   return (
     <span
@@ -195,9 +197,9 @@ export const Badge = ({ children, color = "jade", style }) => {
         gap: "6px",
         padding: "4px 14px",
         borderRadius: "999px",
-        background: colors[color].bg,
-        border: `1px solid ${colors[color].border}`,
-        color: colors[color].text,
+        background: badgeStyle.bg,
+        border: `1px solid ${badgeStyle.border}`,
+        color: badgeStyle.text,
         fontSize: "11px",
         fontWeight: 600,
         letterSpacing: "0.06em",

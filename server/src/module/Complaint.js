@@ -16,9 +16,10 @@ const complaintSchema = new mongoose.Schema(
 
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true },
+    externalId: { type: String, unique: true, sparse: true },
     category: {
       type: String,
-      enum: ["plumbing", "electrical", "security", "cleanliness", "noise", "parking", "lift", "other"],
+      enum: ["plumbing", "electrical", "security", "cleanliness", "noise", "parking", "lift", "infrastructure", "safety", "other"],
       required: true,
     },
     priority: {
@@ -26,12 +27,13 @@ const complaintSchema = new mongoose.Schema(
       enum: ["low", "medium", "high", "critical"],
       default: "medium",
     },
+    resident: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     attachments: [String], // Cloudinary URLs
 
     // Workflow
     status: {
       type: String,
-      enum: ["submitted", "acknowledged", "assigned", "in_progress", "resolved", "closed", "escalated"],
+      enum: ["submitted", "acknowledged", "assigned", "in_progress", "resolved", "closed", "escalated", "Open", "In Progress", "Resolved"],
       default: "submitted",
     },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // maintenance staff

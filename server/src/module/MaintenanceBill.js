@@ -4,9 +4,11 @@ const billSchema = new mongoose.Schema(
   {
     society: { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true },
     resident: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    externalId: { type: String, unique: true, sparse: true },
 
     // Invoice details
     invoiceNumber: { type: String, unique: true },
+    type: { type: String, enum: ["Maintenance", "Water", "Electricity", "Other"], default: "Maintenance" },
     billingMonth: { type: String, required: true }, // "2025-07"
     amount: { type: Number, required: true },
     lateFee: { type: Number, default: 0 },

@@ -127,6 +127,7 @@ app.use("/api/events", require("./routes/events"));
 app.use("/api/forum", require("./routes/forum"));
 app.use("/api/maintenance", require("./routes/maintenance"));
 app.use("/api/notices", require("./routes/notices"));
+app.use("/api/admin-dashboard", require("./routes/adminDashboard"));
 app.use("/api/parking", require("./routes/parking"));
 app.use("/api/societies", require("./routes/societies"));
 app.use("/api/visitors", require("./routes/visitors"));

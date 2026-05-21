@@ -4,8 +4,6 @@ import { useAuth } from "../hooks/useAuth";
 import { COLORS, FONTS } from "../theme";
 import { Card, Button, Badge, Input } from "../components/Common";
 
-const STORAGE_KEY = "superAdminDashboardData";
-
 const defaultData = {
   societies: [
     {
@@ -137,40 +135,122 @@ const defaultData = {
 
 const dateNow = () => new Date().toISOString().slice(0, 10);
 const formatCurrency = (value) => `₹${Number(value).toLocaleString()}`;
-const generateId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
-
-const loadDashboardData = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultData;
-    const parsed = JSON.parse(raw);
-    return {
-      societies: parsed.societies || defaultData.societies,
-      residents: parsed.residents || defaultData.residents,
-      bills: parsed.bills || defaultData.bills,
-      complaints: parsed.complaints || defaultData.complaints,
-      notices: parsed.notices || defaultData.notices,
-    };
-  } catch (error) {
-    console.error("Failed to load dashboard data", error);
-    return defaultData;
+const safeText = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    if (value.tier) return String(value.tier);
+    if (value.name) return String(value.name);
+    return JSON.stringify(value);
   }
+  return String(value);
 };
 
-const saveDashboardData = (data) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+const formatValue = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    if (typeof value.toString === "function" && value.toString !== Object.prototype.toString) {
+      return value.toString();
+    }
+    return value.tier ?? value.name ?? value.status ?? value.label ?? JSON.stringify(value);
+  }
+  return String(value);
+};
+
+const generateId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+
+const getAuthHeaders = (token) => {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 };
 
 const statusBadge = (value) => {
-  if (value === "Active" || value === "Paid" || value === "Resolved") return "jade";
-  if (value === "Due" || value === "Unpaid" || value === "Open") return "gold";
+  const normalized = formatValue(value);
+  if (normalized === "Active" || normalized === "Paid" || normalized === "Resolved") return "jade";
+  if (normalized === "Due" || normalized === "Unpaid" || normalized === "Open") return "gold";
   return "ghost";
+
 };
 
 const AdminDashboard = ({ user }) => {
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState("dashboard");
+
+  const redirectToLogin = () => {
+    logout();
+    navigate("/auth?mode=login");
+  };
+
+  const loadDashboardData = async () => {
+    if (!token) {
+      redirectToLogin();
+      return {
+        societies: defaultData.societies,
+        residents: defaultData.residents,
+        bills: defaultData.bills,
+        complaints: defaultData.complaints,
+        notices: defaultData.notices,
+      };
+    }
+
+    try {
+      const headers = getAuthHeaders(token);
+      const response = await fetch("/api/admin-dashboard", { headers });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          redirectToLogin();
+        }
+        throw new Error(data.message || "Failed to load dashboard state");
+      }
+
+      const state = data.state || {};
+      return {
+        societies: state.societies || defaultData.societies,
+        residents: state.residents || defaultData.residents,
+        bills: state.bills || defaultData.bills,
+        complaints: state.complaints || defaultData.complaints,
+        notices: state.notices || defaultData.notices,
+      };
+    } catch (error) {
+      console.error("Failed to load dashboard data", error);
+      return {
+        societies: defaultData.societies,
+        residents: defaultData.residents,
+        complaints: defaultData.complaints,
+        notices: defaultData.notices,
+        bills: defaultData.bills,
+      };
+    }
+  };
+
+  const saveDashboardState = async (state) => {
+    if (!token) {
+      redirectToLogin();
+      return false;
+    }
+
+    try {
+      const headers = getAuthHeaders(token);
+      const response = await fetch("/api/admin-dashboard", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(state),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          redirectToLogin();
+        }
+        throw new Error(data.message || "Failed to save dashboard state");
+      }
+      return true;
+    } catch (error) {
+      console.error("Save dashboard state error:", error);
+      return false;
+    }
+  };
 
   const [societies, setSocieties] = useState([]);
   const [residents, setResidents] = useState([]);
@@ -205,17 +285,16 @@ const AdminDashboard = ({ user }) => {
   const [noticeFilter, setNoticeFilter] = useState("all");
 
   useEffect(() => {
-    const data = loadDashboardData();
-    setSocieties(data.societies);
-    setResidents(data.residents);
-    setBills(data.bills);
-    setComplaints(data.complaints);
-    setNotices(data.notices);
+    const init = async () => {
+      const data = await loadDashboardData();
+      setSocieties(data.societies);
+      setResidents(data.residents);
+      setBills(data.bills);
+      setComplaints(data.complaints);
+      setNotices(data.notices);
+    };
+    init();
   }, []);
-
-  useEffect(() => {
-    saveDashboardData({ societies, residents, bills, complaints, notices });
-  }, [societies, residents, bills, complaints, notices]);
 
   const counts = useMemo(() => {
     const totalSocieties = societies.length;
@@ -284,7 +363,7 @@ const AdminDashboard = ({ user }) => {
     return errors;
   };
 
-  const handleSocietySave = (event) => {
+  const handleSocietySave = async (event) => {
     event.preventDefault();
     const errors = validateSociety();
     if (Object.keys(errors).length) {
@@ -293,7 +372,7 @@ const AdminDashboard = ({ user }) => {
     }
 
     const societyPayload = {
-      id: societyModalMode === "edit" ? societyForm.id : generateId("soc"),
+      id: societyForm.id || generateId("soc"),
       name: societyForm.name,
       city: societyForm.city,
       address: { line1: societyForm.line1, city: societyForm.city, state: societyForm.state, pincode: societyForm.pincode },
@@ -303,26 +382,32 @@ const AdminDashboard = ({ user }) => {
       registeredAt: societyModalMode === "edit" ? societies.find((s) => s.id === societyForm.id).registeredAt : dateNow(),
       plan: societyForm.plan,
       billingStatus: societyForm.billingStatus,
-      activity: societyModalMode === "edit" ? societies.find((s) => s.id === societyForm.id).activity : ["Society created"],
+      activity: societyModalMode === "edit" ? societies.find((s) => s.id === societyForm.id)?.activity : ["Society created"],
     };
 
-    if (societyModalMode === "edit") {
-      setSocieties((prev) => prev.map((item) => (item.id === societyPayload.id ? societyPayload : item)));
-    } else {
-      setSocieties((prev) => [societyPayload, ...prev]);
-    }
+    const nextSocieties = societyModalMode === "edit"
+      ? societies.map((item) => (item.id === societyPayload.id ? societyPayload : item))
+      : [societyPayload, ...societies];
 
+    setSocieties(nextSocieties);
+    await saveDashboardState({ societies: nextSocieties, residents, bills, complaints, notices });
     closeSocietyModal();
   };
 
-  const confirmDeleteSociety = (id) => {
+  const confirmDeleteSociety = async (id) => {
     if (!window.confirm("Delete this society and all linked data?")) return;
-    setSocieties((prev) => prev.filter((item) => item.id !== id));
-    setResidents((prev) => prev.filter((resident) => resident.societyId !== id));
-    setBills((prev) => prev.filter((bill) => bill.societyId !== id));
-    setComplaints((prev) => prev.filter((complaint) => complaint.societyId !== id));
-    setNotices((prev) => prev.filter((notice) => notice.target !== id));
+    const nextSocieties = societies.filter((item) => item.id !== id);
+    const nextResidents = residents.filter((resident) => resident.societyId !== id);
+    const nextBills = bills.filter((bill) => bill.societyId !== id);
+    const nextComplaints = complaints.filter((complaint) => complaint.societyId !== id);
+    const nextNotices = notices.filter((notice) => notice.target !== id);
+    setSocieties(nextSocieties);
+    setResidents(nextResidents);
+    setBills(nextBills);
+    setComplaints(nextComplaints);
+    setNotices(nextNotices);
     if (detailSociety?.id === id) setDetailSociety(null);
+    await saveDashboardState({ societies: nextSocieties, residents: nextResidents, bills: nextBills, complaints: nextComplaints, notices: nextNotices });
   };
 
   const openDetailSociety = (society) => setDetailSociety(society);
@@ -350,7 +435,7 @@ const AdminDashboard = ({ user }) => {
     return errors;
   };
 
-  const handleResidentSave = (event) => {
+  const handleResidentSave = async (event) => {
     event.preventDefault();
     const errors = validateResident();
     if (Object.keys(errors).length) {
@@ -363,20 +448,24 @@ const AdminDashboard = ({ user }) => {
       id: residentForm.id || generateId("res"),
     };
 
-    if (residentForm.id) {
-      setResidents((prev) => prev.map((item) => (item.id === payload.id ? payload : item)));
-    } else {
-      setResidents((prev) => [payload, ...prev]);
-    }
+    const nextResidents = residentForm.id
+      ? residents.map((item) => (item.id === payload.id ? payload : item))
+      : [payload, ...residents];
 
+    setResidents(nextResidents);
+    await saveDashboardState({ societies, residents: nextResidents, bills, complaints, notices });
     closeResidentModal();
   };
 
-  const confirmDeleteResident = (id) => {
+  const confirmDeleteResident = async (id) => {
     if (!window.confirm("Delete this resident?")) return;
-    setResidents((prev) => prev.filter((item) => item.id !== id));
-    setBills((prev) => prev.map((bill) => (bill.residentId === id ? { ...bill, residentId: "" } : bill)));
-    setComplaints((prev) => prev.map((cmp) => (cmp.residentId === id ? { ...cmp, residentId: "" } : cmp)));
+    const nextResidents = residents.filter((item) => item.id !== id);
+    const nextBills = bills.map((bill) => (bill.residentId === id ? { ...bill, residentId: "" } : bill));
+    const nextComplaints = complaints.map((cmp) => (cmp.residentId === id ? { ...cmp, residentId: "" } : cmp));
+    setResidents(nextResidents);
+    setBills(nextBills);
+    setComplaints(nextComplaints);
+    await saveDashboardState({ societies, residents: nextResidents, bills: nextBills, complaints: nextComplaints, notices });
   };
 
   const openBillModal = (bill = null) => {
@@ -400,7 +489,7 @@ const AdminDashboard = ({ user }) => {
     return errors;
   };
 
-  const handleBillSave = (event) => {
+  const handleBillSave = async (event) => {
     event.preventDefault();
     const errors = validateBill();
     if (Object.keys(errors).length) {
@@ -415,18 +504,20 @@ const AdminDashboard = ({ user }) => {
       createdAt: billForm.id ? bills.find((item) => item.id === billForm.id).createdAt : dateNow(),
     };
 
-    if (billForm.id) {
-      setBills((prev) => prev.map((item) => (item.id === payload.id ? payload : item)));
-    } else {
-      setBills((prev) => [payload, ...prev]);
-    }
+    const nextBills = billForm.id
+      ? bills.map((item) => (item.id === payload.id ? payload : item))
+      : [payload, ...bills];
 
+    setBills(nextBills);
+    await saveDashboardState({ societies, residents, bills: nextBills, complaints, notices });
     closeBillModal();
   };
 
-  const confirmDeleteBill = (id) => {
+  const confirmDeleteBill = async (id) => {
     if (!window.confirm("Delete this bill?")) return;
-    setBills((prev) => prev.filter((item) => item.id !== id));
+    const nextBills = bills.filter((item) => item.id !== id);
+    setBills(nextBills);
+    await saveDashboardState({ societies, residents, bills: nextBills, complaints, notices });
   };
 
   const openComplaintModal = (complaint = null) => {
@@ -449,7 +540,7 @@ const AdminDashboard = ({ user }) => {
     return errors;
   };
 
-  const handleComplaintSave = (event) => {
+  const handleComplaintSave = async (event) => {
     event.preventDefault();
     const errors = validateComplaint();
     if (Object.keys(errors).length) {
@@ -463,18 +554,20 @@ const AdminDashboard = ({ user }) => {
       createdAt: complaintForm.id ? complaints.find((item) => item.id === complaintForm.id).createdAt : dateNow(),
     };
 
-    if (complaintForm.id) {
-      setComplaints((prev) => prev.map((item) => (item.id === payload.id ? payload : item)));
-    } else {
-      setComplaints((prev) => [payload, ...prev]);
-    }
+    const nextComplaints = complaintForm.id
+      ? complaints.map((item) => (item.id === payload.id ? payload : item))
+      : [payload, ...complaints];
 
+    setComplaints(nextComplaints);
+    await saveDashboardState({ societies, residents, bills, complaints: nextComplaints, notices });
     closeComplaintModal();
   };
 
-  const confirmDeleteComplaint = (id) => {
+  const confirmDeleteComplaint = async (id) => {
     if (!window.confirm("Delete this complaint?")) return;
-    setComplaints((prev) => prev.filter((item) => item.id !== id));
+    const nextComplaints = complaints.filter((item) => item.id !== id);
+    setComplaints(nextComplaints);
+    await saveDashboardState({ societies, residents, bills, complaints: nextComplaints, notices });
   };
 
   const openNoticeModal = (notice = null) => {
@@ -499,7 +592,7 @@ const AdminDashboard = ({ user }) => {
     return errors;
   };
 
-  const handleNoticeSave = (event) => {
+  const handleNoticeSave = async (event) => {
     event.preventDefault();
     const errors = validateNotice();
     if (Object.keys(errors).length) {
@@ -512,18 +605,20 @@ const AdminDashboard = ({ user }) => {
       id: noticeForm.id || generateId("notice"),
     };
 
-    if (noticeForm.id) {
-      setNotices((prev) => prev.map((item) => (item.id === payload.id ? payload : item)));
-    } else {
-      setNotices((prev) => [payload, ...prev]);
-    }
+    const nextNotices = noticeForm.id
+      ? notices.map((item) => (item.id === payload.id ? payload : item))
+      : [payload, ...notices];
 
+    setNotices(nextNotices);
+    await saveDashboardState({ societies, residents, bills, complaints, notices: nextNotices });
     closeNoticeModal();
   };
 
-  const confirmDeleteNotice = (id) => {
+  const confirmDeleteNotice = async (id) => {
     if (!window.confirm("Delete this notice?")) return;
-    setNotices((prev) => prev.filter((item) => item.id !== id));
+    const nextNotices = notices.filter((item) => item.id !== id);
+    setNotices(nextNotices);
+    await saveDashboardState({ societies, residents, bills, complaints, notices: nextNotices });
   };
 
   return (
@@ -639,15 +734,17 @@ const AdminDashboard = ({ user }) => {
                       {societies.map((society) => (
                         <tr key={society.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                           <td style={{ padding: "14px 12px" }}>
-                            <button type="button" style={{ background: "none", border: "none", color: COLORS.jade, cursor: "pointer", fontWeight: 600 }} onClick={() => openDetailSociety(society)}>{society.name}</button>
+                            <button type="button" style={{ background: "none", border: "none", color: COLORS.jade, cursor: "pointer", fontWeight: 600 }} onClick={() => openDetailSociety(society)}>
+                              {safeText(society.name)}
+                            </button>
                           </td>
-                          <td style={{ padding: "14px 12px" }}>{society.city}</td>
-                          <td style={{ padding: "14px 12px" }}>{society.totalUnits}</td>
-                          <td style={{ padding: "14px 12px" }}>{society.adminName}</td>
-                          <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(society.status)}>{society.status}</Badge></td>
-                          <td style={{ padding: "14px 12px" }}>{society.registeredAt}</td>
-                          <td style={{ padding: "14px 12px" }}>{society.plan}</td>
-                          <td style={{ padding: "14px 12px" }}>{society.billingStatus}</td>
+                          <td style={{ padding: "14px 12px" }}>{safeText(society.city)}</td>
+                          <td style={{ padding: "14px 12px" }}>{safeText(society.totalUnits)}</td>
+                          <td style={{ padding: "14px 12px" }}>{safeText(society.adminName)}</td>
+                          <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(safeText(society.status))}>{safeText(society.status)}</Badge></td>
+                          <td style={{ padding: "14px 12px" }}>{safeText(society.registeredAt)}</td>
+                          <td style={{ padding: "14px 12px" }}>{safeText(society.plan)}</td>
+                          <td style={{ padding: "14px 12px" }}>{safeText(society.billingStatus)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -721,13 +818,13 @@ const AdminDashboard = ({ user }) => {
                         const society = societies.find((soc) => soc.id === resident.societyId);
                         return (
                           <tr key={resident.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                            <td style={{ padding: "14px 12px" }}>{resident.name}</td>
-                            <td style={{ padding: "14px 12px" }}>{resident.unitNumber}</td>
-                            <td style={{ padding: "14px 12px" }}>{society?.name || "Unknown"}</td>
-                            <td style={{ padding: "14px 12px" }}>{resident.contact}</td>
-                            <td style={{ padding: "14px 12px" }}>{resident.email}</td>
-                            <td style={{ padding: "14px 12px" }}>{resident.moveInDate}</td>
-                            <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(resident.status)}>{resident.status}</Badge></td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident.name)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident.unitNumber)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(society?.name || "Unknown")}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident.contact)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident.email)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident.moveInDate)}</td>
+                            <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(safeText(resident.status))}>{safeText(resident.status)}</Badge></td>
                             <td style={{ padding: "14px 12px", display: "flex", gap: "8px" }}>
                               <Button variant="secondary" size="sm" style={{ padding: "8px 14px" }} onClick={() => openResidentModal(resident)}>Edit</Button>
                               <Button variant="ghost" size="sm" style={{ padding: "8px 14px", color: COLORS.danger }} onClick={() => confirmDeleteResident(resident.id)}>Delete</Button>
@@ -770,12 +867,12 @@ const AdminDashboard = ({ user }) => {
                         const resident = residents.find((res) => res.id === bill.residentId);
                         return (
                           <tr key={bill.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                            <td style={{ padding: "14px 12px" }}>{bill.type}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(bill.type)}</td>
                             <td style={{ padding: "14px 12px" }}>{formatCurrency(bill.amount)}</td>
-                            <td style={{ padding: "14px 12px" }}>{bill.dueDate}</td>
-                            <td style={{ padding: "14px 12px" }}>{society?.name || "Unknown"}</td>
-                            <td style={{ padding: "14px 12px" }}>{resident ? `${resident.name} (${resident.unitNumber})` : "Bulk"}</td>
-                            <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(bill.status)}>{bill.status}</Badge></td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(bill.dueDate)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(society?.name || "Unknown")}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident ? `${resident.name} (${resident.unitNumber})` : "Bulk")}</td>
+                            <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(safeText(bill.status))}>{safeText(bill.status)}</Badge></td>
                             <td style={{ padding: "14px 12px", display: "flex", gap: "8px" }}>
                               <Button variant="secondary" size="sm" style={{ padding: "8px 14px" }} onClick={() => openBillModal(bill)}>Edit</Button>
                               <Button variant="ghost" size="sm" style={{ padding: "8px 14px", color: COLORS.danger }} onClick={() => confirmDeleteBill(bill.id)}>Delete</Button>
@@ -818,12 +915,12 @@ const AdminDashboard = ({ user }) => {
                         const resident = residents.find((res) => res.id === item.residentId);
                         return (
                           <tr key={item.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                            <td style={{ padding: "14px 12px" }}>{item.title}</td>
-                            <td style={{ padding: "14px 12px" }}>{society?.name || "Unknown"}</td>
-                            <td style={{ padding: "14px 12px" }}>{resident ? resident.name : "N/A"}</td>
-                            <td style={{ padding: "14px 12px" }}>{item.category}</td>
-                            <td style={{ padding: "14px 12px" }}>{item.priority}</td>
-                            <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(item.status)}>{item.status}</Badge></td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(item.title)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(society?.name || "Unknown")}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(resident ? resident.name : "N/A")}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(item.category)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(item.priority)}</td>
+                            <td style={{ padding: "14px 12px" }}><Badge color={statusBadge(safeText(item.status))}>{safeText(item.status)}</Badge></td>
                             <td style={{ padding: "14px 12px", display: "flex", gap: "8px" }}>
                               <Button variant="secondary" size="sm" style={{ padding: "8px 14px" }} onClick={() => openComplaintModal(item)}>Edit</Button>
                               <Button variant="ghost" size="sm" style={{ padding: "8px 14px", color: COLORS.danger }} onClick={() => confirmDeleteComplaint(item.id)}>Delete</Button>
@@ -867,10 +964,10 @@ const AdminDashboard = ({ user }) => {
                         return (
                           <tr key={notice.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                             <td style={{ padding: "14px 12px", fontWeight: 600 }}>{notice.title}</td>
-                            <td style={{ padding: "14px 12px" }}>{targetLabel}</td>
-                            <td style={{ padding: "14px 12px" }}>{notice.type}</td>
-                            <td style={{ padding: "14px 12px" }}>{notice.publishDate}</td>
-                            <td style={{ padding: "14px 12px" }}>{notice.expiryDate}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(targetLabel)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(notice.type)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(notice.publishDate)}</td>
+                            <td style={{ padding: "14px 12px" }}>{safeText(notice.expiryDate)}</td>
                             <td style={{ padding: "14px 12px", display: "flex", gap: "8px" }}>
                               <Button variant="secondary" size="sm" style={{ padding: "8px 14px" }} onClick={() => openNoticeModal(notice)}>Edit</Button>
                               <Button variant="ghost" size="sm" style={{ padding: "8px 14px", color: COLORS.danger }} onClick={() => confirmDeleteNotice(notice.id)}>Delete</Button>

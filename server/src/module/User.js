@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema(
 
     // Resident-specific
     flatNumber: { type: String, trim: true },
+    externalId: { type: String, unique: true, sparse: true },
     wing: { type: String, trim: true },
     vehicles: [
       {
@@ -33,6 +34,8 @@ const userSchema = new mongoose.Schema(
       },
     ],
     familyMembers: [{ name: String, relation: String, phone: String }],
+    moveInDate: Date,
+    status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
 
     // Profile
     avatar: { type: String },

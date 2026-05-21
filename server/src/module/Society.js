@@ -16,6 +16,7 @@ const societySchema = new mongoose.Schema(
     registrationNumber: String,
     logo: String,
 
+    externalId: { type: String, unique: true, sparse: true },
     // Billing config
     billing: {
       cycleDay: { type: Number, default: 1 },      // day-of-month invoices generate
@@ -29,15 +30,17 @@ const societySchema = new mongoose.Schema(
       ],
     },
 
+    plan: { type: String, enum: ["Premium", "Standard", "Basic"], default: "Premium" },
+    billingStatus: { type: String, enum: ["Current", "Due", "Overdue"], default: "Current" },
+    status: { type: String, enum: ["Active", "Paused", "Inactive"], default: "Active" },
+    adminName: String,
+    activity: [String],
     // Contact
     contactEmail: String,
     contactPhone: String,
 
-    // Plan
-    plan: {
-      tier: { type: String, enum: ["starter", "growth", "enterprise"], default: "starter" },
-      expiresAt: Date,
-    },
+    // Plan expiration
+    planExpiry: Date,
 
     isActive: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
