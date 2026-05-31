@@ -4,7 +4,7 @@ const { protect, authorize } = require("../middlewares/auth");
 const ctrl = require("../controllers/adminDashboardController");
 
 router.use(protect);
-router.get("/", authorize("super_admin", "admin"), ctrl.getDashboardState);
+router.get("/", ctrl.getDashboardState);
 router.post("/", authorize("super_admin", "admin"), ctrl.saveDashboardState);
 
 module.exports = router;

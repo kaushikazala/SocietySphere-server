@@ -9,13 +9,21 @@ const getJwtSecret = (name) => {
   return secret;
 };
 
-const signAccess = (userId) =>
-  jwt.sign({ id: userId }, getJwtSecret("JWT_SECRET"), {
+const signAccess = (user) =>
+  jwt.sign({ 
+    id: user._id,
+    role: user.role,
+    societyId: user.society?._id || user.society || null
+  }, getJwtSecret("JWT_SECRET"), {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 
-const signRefresh = (userId) =>
-  jwt.sign({ id: userId }, getJwtSecret("JWT_REFRESH_SECRET"), {
+const signRefresh = (user) =>
+  jwt.sign({ 
+    id: user._id,
+    role: user.role,
+    societyId: user.society?._id || user.society || null
+  }, getJwtSecret("JWT_REFRESH_SECRET"), {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
   });
 
@@ -23,8 +31,8 @@ const hashToken = (token) => bcrypt.hash(token, 8);
 const compareToken = (raw, hashed) => bcrypt.compare(raw, hashed);
 
 const sendTokens = async (user, statusCode, res) => {
-  const accessToken = signAccess(user._id);
-  const refreshToken = signRefresh(user._id);
+  const accessToken = signAccess(user);
+  const refreshToken = signRefresh(user);
 
   // Persist hashed refresh token on user
   user.refreshTokenHash = await hashToken(refreshToken);

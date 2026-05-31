@@ -68,9 +68,10 @@ exports.login = async (req, res, next) => {
 
     await user.populate("society");
 
-    // Optional: role mismatch guard
-    if (role && user.role !== role)
-      return res.status(403).json({ success: false, message: "Role mismatch" });
+    // Reject login for role selection mismatch to enforce RBAC exactly
+    if (role && user.role !== role) {
+      return res.status(401).json({ success: false, message: "Role mismatch: selected role does not match user account role." });
+    }
 
     await sendTokens(user, 200, res);
   } catch (err) {

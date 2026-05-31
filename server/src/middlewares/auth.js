@@ -1,5 +1,14 @@
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const User = require("../module/User");
+const Society = require("../module/Society");
+
+const resolveSocietyId = async (identifier) => {
+  if (!identifier) return null;
+  if (mongoose.Types.ObjectId.isValid(identifier)) return identifier;
+  const society = await Society.findOne({ externalId: identifier }).select("_id");
+  return society?._id?.toString() || null;
+};
 
 // ── Verify access token ───────────────────────────────────────────────────────
 exports.protect = async (req, res, next) => {
@@ -38,15 +47,18 @@ exports.authorize = (...roles) => (req, res, next) => {
 
 // ── Same-society gate ─────────────────────────────────────────────────────────
 // Ensures req.user belongs to the society referenced in req.params.id or req.body.society
-exports.sameSociety = (req, res, next) => {
+exports.sameSociety = async (req, res, next) => {
   if (!req.user)
     return res.status(401).json({ success: false, message: "Unauthorized" });
 
-  const societyId = req.params.societyId || req.params.id || req.body.society;
-  if (
-    req.user.role !== "super_admin" &&
-    req.user.society?.toString() !== societyId?.toString()
-  ) {
+  if (req.user.role === "super_admin") {
+    return next();
+  }
+
+  const societyIdentifier = req.params.societyId || req.params.id || req.body.society;
+  const resolvedSocietyId = await resolveSocietyId(societyIdentifier);
+
+  if (!resolvedSocietyId || req.user.society?.toString() !== resolvedSocietyId) {
     return res.status(403).json({ success: false, message: "Access restricted to your own society" });
   }
   next();

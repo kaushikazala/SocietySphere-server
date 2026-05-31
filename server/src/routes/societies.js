@@ -16,8 +16,11 @@ router.get(
   ctrl.getSociety
 );
 router.patch("/:id", authorize("super_admin", "admin"), sameSociety, ctrl.updateSociety);
+router.delete("/:id", authorize("super_admin"), ctrl.deleteSociety);
 
 router.get("/:id/members", authorize("super_admin", "admin"), sameSociety, ctrl.getMembers);
+router.post("/:id/members", authorize("super_admin", "admin"), sameSociety, ctrl.createMember);
 router.patch("/:id/members/:userId", authorize("super_admin", "admin"), sameSociety, ctrl.updateMember);
+router.delete("/:id/members/:userId", authorize("super_admin", "admin"), sameSociety, ctrl.deleteMember);
 
 module.exports = router;

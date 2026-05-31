@@ -9,7 +9,7 @@ const noticeSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     body: { type: String, required: true },
     message: String,
-    type: { type: String, enum: ["General", "Urgent", "Emergency"], default: "General" },
+    type: { type: String, enum: ["General", "Urgent", "Emergency","Event"], default: "General" },
     target: { type: String, default: "All" },
     publishDate: Date,
     expiryDate: Date,

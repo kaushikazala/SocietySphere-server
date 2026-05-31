@@ -41,13 +41,16 @@ const billSchema = new mongoose.Schema(
 );
 
 // ── Auto-generate invoice number ──────────────────────────────────────────────
-billSchema.pre("save", function (next) {
+billSchema.pre("save", async function () {
   if (!this.invoiceNumber) {
     const ts = Date.now().toString(36).toUpperCase();
     this.invoiceNumber = `INV-${ts}`;
   }
-  this.totalDue = this.amount + this.lateFee - this.discount;
-  next();
+  // ensure numeric values to avoid NaN
+  const amount = Number(this.amount) || 0;
+  const lateFee = Number(this.lateFee) || 0;
+  const discount = Number(this.discount) || 0;
+  this.totalDue = amount + lateFee - discount;
 });
 
 billSchema.index({ society: 1, billingMonth: 1 });

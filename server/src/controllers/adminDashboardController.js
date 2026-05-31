@@ -3,9 +3,22 @@ const User = require("../module/User");
 const MaintenanceBill = require("../module/MaintenanceBill");
 const Complaint = require("../module/Complaint");
 const Notice = require("../module/Notice");
+const Visitor = require("../module/Visitor");
 
 const toExternalId = (doc) => (doc.externalId || doc._id.toString());
 const parseDate = (value) => (value ? new Date(value) : null);
+
+const normalizeString = (value, fallback = "") => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "object") {
+    if (value.tier) return String(value.tier);
+    if (value.name) return String(value.name);
+    if (value.status) return String(value.status);
+    if (value.label) return String(value.label);
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
 
 const mapStatusToDb = (status) => {
   if (!status) return "pending";
@@ -55,7 +68,28 @@ const mapNoticeTypeFromDb = (priority) => {
 
 const getAccessibleSocietyFilter = (user) => {
   if (user.role === "super_admin") return {};
-  return { _id: user.society };
+  if (user.society) return { _id: user.society };
+  return { _id: null };
+};
+
+const getDashboardStateFilters = (user, societyIds) => {
+  const societyFilter = user.role === "super_admin" ? {} : { society: { $in: societyIds } };
+
+  const residentFilter = user.role === "resident"
+    ? { _id: user._id }
+    : { role: "resident", society: { $in: societyIds } };
+
+  const billFilter = user.role === "resident"
+    ? { society: { $in: societyIds }, resident: user._id }
+    : { society: { $in: societyIds } };
+
+  const complaintFilter = user.role === "resident"
+    ? { society: { $in: societyIds }, raisedBy: user._id }
+    : { society: { $in: societyIds } };
+
+  const noticeFilter = user.role === "super_admin" ? {} : { society: { $in: societyIds } };
+
+  return { societyFilter, residentFilter, billFilter, complaintFilter, noticeFilter };
 };
 
 const toSocietyResponse = (society) => ({
@@ -67,8 +101,8 @@ const toSocietyResponse = (society) => ({
   adminName: society.adminName || "",
   status: society.status || (society.isActive ? "Active" : "Inactive"),
   registeredAt: society.createdAt?.toISOString().slice(0, 10) || new Date().toISOString().slice(0, 10),
-  plan: society.plan || "Premium",
-  billingStatus: society.billingStatus || "Current",
+  plan: normalizeString(society.plan, "Premium") || "Premium",
+  billingStatus: normalizeString(society.billingStatus, "Current") || "Current",
   activity: society.activity || [],
 });
 
@@ -122,24 +156,79 @@ exports.getDashboardState = async (req, res, next) => {
     const societies = await Society.find(societyFilter).lean();
     const societyIds = societies.map((soc) => soc._id);
 
-    const residents = await User.find({ role: "resident", society: { $in: societyIds } }).lean();
-    const bills = await MaintenanceBill.find({ society: { $in: societyIds } }).lean();
-    const complaints = await Complaint.find({ society: { $in: societyIds } }).lean();
-    const notices = await Notice.find({ society: { $in: societyIds } }).lean();
-
     const societyMap = new Map(societies.map((soc) => [soc._id.toString(), toExternalId(soc)]));
+
+    const residentFilter = req.user.role === "resident"
+      ? { _id: req.user._id }
+      : { role: "resident", society: { $in: societyIds } };
+
+    const billFilter = req.user.role === "resident"
+      ? { society: { $in: societyIds }, resident: req.user._id }
+      : { society: { $in: societyIds } };
+
+    const complaintFilter = req.user.role === "resident"
+      ? { society: { $in: societyIds }, raisedBy: req.user._id }
+      : { society: { $in: societyIds } };
+
+    const noticeFilter = { society: { $in: societyIds }, isArchived: false };
+
+    const visitorFilter = req.user.role === "guard"
+      ? { society: { $in: societyIds } }
+      : { society: { $in: societyIds } };
+
+    const [residents, bills, complaints, notices, visitors] = await Promise.all([
+      User.find(residentFilter).lean(),
+      MaintenanceBill.find(billFilter).lean(),
+      Complaint.find(complaintFilter).lean(),
+      Notice.find(noticeFilter).lean(),
+      Visitor.find(visitorFilter).lean(),
+    ]);
+
     const residentMap = new Map(residents.map((res) => [res._id.toString(), toExternalId(res)]));
 
-    res.json({
-      success: true,
-      state: {
-        societies: societies.map(toSocietyResponse),
-        residents: residents.map(toResidentResponse),
-        bills: bills.map((bill) => toBillResponse(bill, residentMap, societyMap)),
-        complaints: complaints.map((complaint) => toComplaintResponse(complaint, residentMap, societyMap)),
-        notices: notices.map(toNoticeResponse),
-      },
-    });
+    const summary = {
+      totalResidents: req.user.role === "resident"
+        ? 1
+        : await User.countDocuments({ role: "resident", society: { $in: societyIds } }),
+      unpaidBills: await MaintenanceBill.countDocuments(
+        req.user.role === "resident"
+          ? { society: { $in: societyIds }, resident: req.user._id, status: "pending" }
+          : { society: { $in: societyIds }, status: "pending" }
+      ),
+      pendingComplaints: await Complaint.countDocuments(
+        req.user.role === "resident"
+          ? { society: { $in: societyIds }, raisedBy: req.user._id, status: { $in: ["submitted", "acknowledged", "assigned", "in_progress"] } }
+          : { society: { $in: societyIds }, status: { $in: ["submitted", "acknowledged", "assigned", "in_progress"] } }
+      ),
+      activeNotices: await Notice.countDocuments({ society: { $in: societyIds }, isArchived: false }),
+      pendingVisitorApprovals: await Visitor.countDocuments({ society: { $in: societyIds }, status: "pending" }),
+    };
+
+    const state = {
+      societies: societies.map(toSocietyResponse),
+      residents: req.user.role === "resident" ? residents.map(toResidentResponse) : residents.map(toResidentResponse),
+      bills: bills.map((bill) => toBillResponse(bill, residentMap, societyMap)),
+      complaints: complaints.map((complaint) => toComplaintResponse(complaint, residentMap, societyMap)),
+      notices: notices.map(toNoticeResponse),
+    };
+
+    if (req.user.role === "guard") {
+      state.visitors = visitors.map((visitor) => ({
+        id: toExternalId(visitor),
+        name: visitor.name,
+        phone: visitor.phone,
+        hostId: visitor.host?.toString() || "",
+        purpose: visitor.purpose,
+        status: visitor.status,
+        expectedDate: visitor.expectedDate?.toISOString().slice(0, 10) || "",
+        entryTime: visitor.entryTime?.toISOString() || null,
+        exitTime: visitor.exitTime?.toISOString() || null,
+      }));
+      state.bills = [];
+      state.complaints = [];
+    }
+
+    res.json({ success: true, state, summary });
   } catch (err) {
     next(err);
   }
@@ -156,11 +245,11 @@ const buildSocietyDoc = (state) => ({
   },
   totalUnits: Number(state.totalUnits) || 0,
   adminName: state.adminName || "",
-  status: state.status || "Active",
-  plan: state.plan || "Premium",
-  billingStatus: state.billingStatus || "Current",
+  status: normalizeString(state.status, "Active") || "Active",
+  plan: normalizeString(state.plan, "Premium") || "Premium",
+  billingStatus: normalizeString(state.billingStatus, "Current") || "Current",
   activity: state.activity || [],
-  isActive: state.status !== "Inactive",
+  isActive: normalizeString(state.status, "Active") !== "Inactive",
 });
 
 const buildResidentDoc = (state, societyMap) => ({
@@ -216,26 +305,29 @@ const buildNoticeDoc = (state, societyMap, user) => ({
   createdBy: user._id,
 });
 
-const upsertDocuments = async (Model, items, buildDoc, extraFilter = {}) => {
+const upsertDocuments = async (Model, items, buildDoc, buildFilter, extraFilter = {}) => {
   const externalIds = [];
 
   for (const item of items) {
-    const externalId = item.id;
-    externalIds.push(externalId);
+    const externalId = item.id || item.externalId;
     const doc = buildDoc(item);
+    const query = typeof buildFilter === "function"
+      ? buildFilter(item, extraFilter)
+      : { externalId, ...extraFilter };
+
+    if (externalId && !query.externalId) {
+      query.externalId = externalId;
+    }
+
+    externalIds.push(externalId);
     await Model.findOneAndUpdate(
-      { externalId, ...extraFilter },
-      doc,
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      query,
+      { $set: doc, $setOnInsert: { externalId } },
+      { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
   }
 
   return externalIds;
-};
-
-const deleteMissingDocuments = async (Model, externalIds, filter = {}) => {
-  if (!Array.isArray(externalIds)) return;
-  await Model.deleteMany({ ...filter, externalId: { $nin: externalIds } });
 };
 
 exports.saveDashboardState = async (req, res, next) => {
@@ -245,25 +337,88 @@ exports.saveDashboardState = async (req, res, next) => {
     const societiesInScope = await Society.find(societyFilter).lean();
     const societyMap = new Map(societiesInScope.map((soc) => [toExternalId(soc), soc._id]));
 
-    const societyExternalIds = await upsertDocuments(Society, state.societies || [], buildSocietyDoc, societyFilter);
-    const societiesUpdated = await Society.find({ externalId: { $in: societyExternalIds } }).lean();
+    const buildSocietyFilter = (item, extraFilter = {}) => {
+      const filter = { ...extraFilter };
+      const externalId = item.id || item.externalId;
+      if (externalId) {
+        filter.externalId = externalId;
+        return filter;
+      }
+      if (item.name) {
+        filter.name = item.name;
+        if (item.address?.city) filter['address.city'] = item.address.city;
+        if (item.address?.line1) filter['address.line1'] = item.address.line1;
+      }
+      return filter;
+    };
+
+    const buildResidentFilter = (item, extraFilter = {}) => {
+      const filter = { ...extraFilter };
+      const externalId = item.id || item.externalId;
+      if (externalId) {
+        filter.externalId = externalId;
+        return filter;
+      }
+      if (item.email) filter.email = item.email;
+      if (!filter.email && item.name) filter.name = item.name;
+      if (item.societyId && societyMap.has(item.societyId)) filter.society = societyMap.get(item.societyId);
+      return filter;
+    };
+
+    const buildBillFilter = (item, extraFilter = {}) => {
+      const filter = { ...extraFilter };
+      const externalId = item.id || item.externalId;
+      if (externalId) {
+        filter.externalId = externalId;
+        return filter;
+      }
+      if (item.invoiceNumber) filter.invoiceNumber = item.invoiceNumber;
+      if (item.societyId && societyMap.has(item.societyId)) filter.society = societyMap.get(item.societyId);
+      if (item.residentId && residentMap.has(item.residentId)) filter.resident = residentMap.get(item.residentId);
+      if (item.billingMonth) filter.billingMonth = item.billingMonth;
+      return filter;
+    };
+
+    const buildComplaintFilter = (item, extraFilter = {}) => {
+      const filter = { ...extraFilter };
+      const externalId = item.id || item.externalId;
+      if (externalId) {
+        filter.externalId = externalId;
+        return filter;
+      }
+      if (item.title) filter.title = item.title;
+      if (item.societyId && societyMap.has(item.societyId)) filter.society = societyMap.get(item.societyId);
+      if (item.residentId && residentMap.has(item.residentId)) filter.raisedBy = residentMap.get(item.residentId);
+      if (item.category) filter.category = item.category.toLowerCase();
+      return filter;
+    };
+
+    const buildNoticeFilter = (item, extraFilter = {}) => {
+      const filter = { ...extraFilter };
+      const externalId = item.id || item.externalId;
+      if (externalId) {
+        filter.externalId = externalId;
+        return filter;
+      }
+      if (item.title) filter.title = item.title;
+      if (item.publishDate) filter.publishDate = parseDate(item.publishDate);
+      if (item.societyId && societyMap.has(item.societyId)) filter.society = societyMap.get(item.societyId);
+      return filter;
+    };
+
+    const societyExternalIds = await upsertDocuments(Society, state.societies || [], buildSocietyDoc, buildSocietyFilter, societyFilter);
+    const societiesUpdated = await Society.find({ externalId: { $in: societyExternalIds.filter(Boolean) } }).lean();
     societiesUpdated.forEach((soc) => societyMap.set(toExternalId(soc), soc._id));
 
-    const residentExternalIds = await upsertDocuments(User, state.residents || [], (item) => buildResidentDoc(item, societyMap), { role: "resident" });
-    const residentsUpdated = await User.find({ externalId: { $in: residentExternalIds } }).lean();
+    const residentExternalIds = await upsertDocuments(User, state.residents || [], (item) => buildResidentDoc(item, societyMap), buildResidentFilter, { role: 'resident' });
+    const residentsUpdated = await User.find({ externalId: { $in: residentExternalIds.filter(Boolean) } }).lean();
     const residentMap = new Map(residentsUpdated.map((res) => [toExternalId(res), res._id]));
 
-    const billExternalIds = await upsertDocuments(MaintenanceBill, state.bills || [], (item) => buildBillDoc(item, societyMap, residentMap), societyFilter);
-    await upsertDocuments(Complaint, state.complaints || [], (item) => buildComplaintDoc(item, societyMap, residentMap), societyFilter);
-    await upsertDocuments(Notice, state.notices || [], (item) => buildNoticeDoc(item, societyMap, req.user), societyFilter);
+    await upsertDocuments(MaintenanceBill, state.bills || [], (item) => buildBillDoc(item, societyMap, residentMap), buildBillFilter, societyFilter);
+    await upsertDocuments(Complaint, state.complaints || [], (item) => buildComplaintDoc(item, societyMap, residentMap), buildComplaintFilter, societyFilter);
+    await upsertDocuments(Notice, state.notices || [], (item) => buildNoticeDoc(item, societyMap, req.user), buildNoticeFilter, societyFilter);
 
-    await deleteMissingDocuments(User, residentExternalIds, { role: "resident", society: { $in: Array.from(societyMap.values()) } });
-    await deleteMissingDocuments(MaintenanceBill, billExternalIds, { society: { $in: Array.from(societyMap.values()) } });
-    await deleteMissingDocuments(Complaint, state.complaints?.map((item) => item.id), { society: { $in: Array.from(societyMap.values()) } });
-    await deleteMissingDocuments(Notice, state.notices?.map((item) => item.id), { society: { $in: Array.from(societyMap.values()) } });
-    await deleteMissingDocuments(Society, societyExternalIds, societyFilter);
-
-    res.json({ success: true, message: "Dashboard state synchronized to database" });
+    res.json({ success: true, message: 'Dashboard state synchronized to database' });
   } catch (err) {
     next(err);
   }

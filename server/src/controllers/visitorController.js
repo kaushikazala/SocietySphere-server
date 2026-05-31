@@ -31,8 +31,13 @@ exports.createVisitor = async (req, res, next) => {
 // ── GET /api/visitors ─────────────────────────────────────────────────────────
 exports.getVisitors = async (req, res, next) => {
   try {
-    const { status, page = 1, limit = 20, date } = req.query;
-    const filter = { society: req.user.society };
+    const { status, page = 1, limit = 20, date, societyId } = req.query;
+    const filter = {};
+    if (req.user.role !== "super_admin") {
+      filter.society = req.user.society;
+    } else if (societyId) {
+      filter.society = societyId;
+    }
 
     if (["resident"].includes(req.user.role)) filter.host = req.user._id;
     if (status) filter.status = status;
@@ -120,6 +125,30 @@ exports.approveWalkIn = async (req, res, next) => {
     await visitor.save();
 
     res.json({ success: true, visitor });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── DELETE /api/visitors/:id ─────────────────────────────────────────────────────
+exports.deleteVisitor = async (req, res, next) => {
+  try {
+    const visitor = await Visitor.findById(req.params.id);
+    if (!visitor) return res.status(404).json({ success: false, message: "Visitor not found" });
+
+    const isSameSociety = visitor.society?.toString() === req.user.society?.toString();
+    if (req.user.role === "super_admin") {
+      // allow
+    } else if (req.user.role === "admin" && isSameSociety) {
+      // allow
+    } else if (req.user.role === "guard" && isSameSociety) {
+      // allow
+    } else {
+      return res.status(403).json({ success: false, message: "Not authorised" });
+    }
+
+    await Visitor.findByIdAndDelete(visitor._id);
+    res.json({ success: true, message: "Visitor log deleted" });
   } catch (err) {
     next(err);
   }

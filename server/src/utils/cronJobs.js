@@ -29,24 +29,26 @@ const generateMonthlyBills = async () => {
 
       for (const user of users) {
         // Check if bill already exists for current month
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1; // 1-12
+        const currentYear = now.getFullYear();
+        const billingMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`; // e.g. "2026-05"
 
         const existingBill = await MaintenanceBill.findOne({
-          user: user._id,
-          month: currentMonth,
-          year: currentYear
+          resident: user._id,
+          society: society._id,
+          billingMonth,
         });
 
         if (!existingBill) {
           const bill = new MaintenanceBill({
-            user: user._id,
+            resident: user._id,
             society: society._id,
             amount: maintenanceAmount,
-            month: currentMonth,
-            year: currentYear,
-            dueDate: new Date(currentYear, currentMonth + 1, 10), // Due on 10th of next month
-            status: 'pending'
+            billingMonth,
+            dueDate: new Date(currentYear, currentMonth, 10), // Due on 10th of next month logic: currentMonth is 1-12, JS Date month is 0-based; using currentMonth will set next month correctly
+            status: 'pending',
+            totalDue: maintenanceAmount,
           });
 
           await bill.save();
@@ -75,7 +77,7 @@ const sendBillReminders = async () => {
     const overdueBills = await MaintenanceBill.find({
       status: 'pending',
       dueDate: { $lt: new Date() }
-    }).populate('user society');
+    }).populate('resident society');
 
     for (const bill of overdueBills) {
       // Send reminder notification
@@ -83,7 +85,7 @@ const sendBillReminders = async () => {
         billId: bill._id,
         amount: bill.amount,
         dueDate: bill.dueDate,
-        userId: bill.user._id
+        residentId: bill.resident._id
       });
     }
 

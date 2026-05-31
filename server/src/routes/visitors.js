@@ -12,6 +12,7 @@ router.get("/scan/:token", authorize("guard", "admin"), ctrl.scanQR);
 router.patch("/:id/entry", authorize("guard", "admin"), ctrl.logEntry);
 router.patch("/:id/exit", authorize("guard", "admin"), ctrl.logExit);
 router.patch("/:id/approve", authorize("resident"), ctrl.approveWalkIn);
+router.delete("/:id", authorize("guard", "admin", "super_admin"), ctrl.deleteVisitor);
 router.patch("/:id/blacklist", authorize("admin", "super_admin"), ctrl.blacklist);
 
 module.exports = router;

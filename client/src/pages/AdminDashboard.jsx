@@ -185,13 +185,7 @@ const AdminDashboard = ({ user }) => {
   const loadDashboardData = async () => {
     if (!token) {
       redirectToLogin();
-      return {
-        societies: defaultData.societies,
-        residents: defaultData.residents,
-        bills: defaultData.bills,
-        complaints: defaultData.complaints,
-        notices: defaultData.notices,
-      };
+      return { societies: [], residents: [], bills: [], complaints: [], notices: [] };
     }
 
     try {
@@ -207,49 +201,78 @@ const AdminDashboard = ({ user }) => {
 
       const state = data.state || {};
       return {
-        societies: state.societies || defaultData.societies,
-        residents: state.residents || defaultData.residents,
-        bills: state.bills || defaultData.bills,
-        complaints: state.complaints || defaultData.complaints,
-        notices: state.notices || defaultData.notices,
+        societies: state.societies || [],
+        residents: state.residents || [],
+        bills: state.bills || [],
+        complaints: state.complaints || [],
+        notices: state.notices || [],
       };
     } catch (error) {
       console.error("Failed to load dashboard data", error);
-      return {
-        societies: defaultData.societies,
-        residents: defaultData.residents,
-        complaints: defaultData.complaints,
-        notices: defaultData.notices,
-        bills: defaultData.bills,
-      };
+      return { societies: [], residents: [], bills: [], complaints: [], notices: [] };
     }
   };
 
-  const saveDashboardState = async (state) => {
+  const refreshDashboardData = async () => {
+    const data = await loadDashboardData();
+    setSocieties(data.societies);
+    setResidents(data.residents);
+    setBills(data.bills);
+    setComplaints(data.complaints);
+    setNotices(data.notices);
+  };
+
+  const apiPost = async (endpoint, payload) => {
     if (!token) {
       redirectToLogin();
-      return false;
+      return null;
     }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) redirectToLogin();
+      throw new Error(data.message || "API request failed");
+    }
+    return data;
+  };
 
-    try {
-      const headers = getAuthHeaders(token);
-      const response = await fetch("/api/admin-dashboard", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(state),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          redirectToLogin();
-        }
-        throw new Error(data.message || "Failed to save dashboard state");
-      }
-      return true;
-    } catch (error) {
-      console.error("Save dashboard state error:", error);
-      return false;
+  const apiPatch = async (endpoint, payload) => {
+    if (!token) {
+      redirectToLogin();
+      return null;
     }
+    const response = await fetch(endpoint, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) redirectToLogin();
+      throw new Error(data.message || "API request failed");
+    }
+    return data;
+  };
+
+  const apiDelete = async (endpoint) => {
+    if (!token) {
+      redirectToLogin();
+      return null;
+    }
+    const response = await fetch(endpoint, {
+      method: "DELETE",
+      headers: getAuthHeaders(token),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) redirectToLogin();
+      throw new Error(data.message || "API delete failed");
+    }
+    return data;
   };
 
   const [societies, setSocieties] = useState([]);
@@ -371,43 +394,39 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    const societyPayload = {
-      id: societyForm.id || generateId("soc"),
+    const payload = {
       name: societyForm.name,
-      city: societyForm.city,
       address: { line1: societyForm.line1, city: societyForm.city, state: societyForm.state, pincode: societyForm.pincode },
       totalUnits: Number(societyForm.totalUnits),
       adminName: societyForm.adminName,
-      status: societyForm.status,
-      registeredAt: societyModalMode === "edit" ? societies.find((s) => s.id === societyForm.id).registeredAt : dateNow(),
-      plan: societyForm.plan,
-      billingStatus: societyForm.billingStatus,
-      activity: societyModalMode === "edit" ? societies.find((s) => s.id === societyForm.id)?.activity : ["Society created"],
     };
 
-    const nextSocieties = societyModalMode === "edit"
-      ? societies.map((item) => (item.id === societyPayload.id ? societyPayload : item))
-      : [societyPayload, ...societies];
-
-    setSocieties(nextSocieties);
-    await saveDashboardState({ societies: nextSocieties, residents, bills, complaints, notices });
-    closeSocietyModal();
+    try {
+      if (societyModalMode === "edit" && societyForm.id) {
+        await fetch(`/api/societies/${societyForm.id}`, {
+          method: "PATCH",
+          headers: getAuthHeaders(token),
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiPost("/api/societies", payload);
+      }
+      await refreshDashboardData();
+      closeSocietyModal();
+    } catch (error) {
+      console.error("Failed to save society", error);
+    }
   };
 
   const confirmDeleteSociety = async (id) => {
     if (!window.confirm("Delete this society and all linked data?")) return;
-    const nextSocieties = societies.filter((item) => item.id !== id);
-    const nextResidents = residents.filter((resident) => resident.societyId !== id);
-    const nextBills = bills.filter((bill) => bill.societyId !== id);
-    const nextComplaints = complaints.filter((complaint) => complaint.societyId !== id);
-    const nextNotices = notices.filter((notice) => notice.target !== id);
-    setSocieties(nextSocieties);
-    setResidents(nextResidents);
-    setBills(nextBills);
-    setComplaints(nextComplaints);
-    setNotices(nextNotices);
-    if (detailSociety?.id === id) setDetailSociety(null);
-    await saveDashboardState({ societies: nextSocieties, residents: nextResidents, bills: nextBills, complaints: nextComplaints, notices: nextNotices });
+    try {
+      await apiDelete(`/api/societies/${id}`);
+      await refreshDashboardData();
+      if (detailSociety?.id === id) setDetailSociety(null);
+    } catch (error) {
+      console.error("Failed to delete society", error);
+    }
   };
 
   const openDetailSociety = (society) => setDetailSociety(society);
@@ -443,29 +462,41 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    const payload = {
-      ...residentForm,
-      id: residentForm.id || generateId("res"),
-    };
-
-    const nextResidents = residentForm.id
-      ? residents.map((item) => (item.id === payload.id ? payload : item))
-      : [payload, ...residents];
-
-    setResidents(nextResidents);
-    await saveDashboardState({ societies, residents: nextResidents, bills, complaints, notices });
-    closeResidentModal();
+    try {
+      if (residentForm.id) {
+        await fetch(`/api/societies/${residentForm.societyId}/members/${residentForm.id}`, {
+          method: "PATCH",
+          headers: getAuthHeaders(token),
+          body: JSON.stringify({ name: residentForm.name, email: residentForm.email, phone: residentForm.contact, flatNumber: residentForm.unitNumber, role: residentForm.role || "resident", status: residentForm.status }),
+        });
+      } else {
+        await apiPost(`/api/societies/${residentForm.societyId}/members`, {
+          name: residentForm.name,
+          email: residentForm.email,
+          phone: residentForm.contact,
+          flatNumber: residentForm.unitNumber,
+          wing: residentForm.societyId,
+          role: residentForm.role || "resident",
+          status: residentForm.status,
+        });
+      }
+      await refreshDashboardData();
+      closeResidentModal();
+    } catch (error) {
+      console.error("Failed to save resident", error);
+    }
   };
 
   const confirmDeleteResident = async (id) => {
     if (!window.confirm("Delete this resident?")) return;
-    const nextResidents = residents.filter((item) => item.id !== id);
-    const nextBills = bills.map((bill) => (bill.residentId === id ? { ...bill, residentId: "" } : bill));
-    const nextComplaints = complaints.map((cmp) => (cmp.residentId === id ? { ...cmp, residentId: "" } : cmp));
-    setResidents(nextResidents);
-    setBills(nextBills);
-    setComplaints(nextComplaints);
-    await saveDashboardState({ societies, residents: nextResidents, bills: nextBills, complaints: nextComplaints, notices });
+    const resident = residents.find((item) => item.id === id);
+    if (!resident) return;
+    try {
+      await apiDelete(`/api/societies/${resident.societyId}/members/${id}`);
+      await refreshDashboardData();
+    } catch (error) {
+      console.error("Failed to delete resident", error);
+    }
   };
 
   const openBillModal = (bill = null) => {
@@ -497,27 +528,50 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    const payload = {
-      ...billForm,
-      id: billForm.id || generateId("bill"),
-      amount: Number(billForm.amount),
-      createdAt: billForm.id ? bills.find((item) => item.id === billForm.id).createdAt : dateNow(),
-    };
-
-    const nextBills = billForm.id
-      ? bills.map((item) => (item.id === payload.id ? payload : item))
-      : [payload, ...bills];
-
-    setBills(nextBills);
-    await saveDashboardState({ societies, residents, bills: nextBills, complaints, notices });
-    closeBillModal();
+    try {
+      if (billForm.id) {
+        // Editing existing bill → use PATCH to prevent duplicate creation
+        await apiPatch(`/api/maintenance/bills/${billForm.id}`, {
+          type: billForm.type,
+          amount: Number(billForm.amount),
+          dueDate: billForm.dueDate,
+          status: billForm.status,
+          notes: billForm.notes || "",
+        });
+      } else if (!billForm.residentId) {
+        // No resident selected → generate bills for the society for the billing month
+        const billingMonth = billForm.dueDate ? new Date(billForm.dueDate).toISOString().slice(0, 7) : undefined;
+        await apiPost("/api/maintenance/bills/generate", {
+          billingMonth,
+          dueDate: billForm.dueDate,
+          societyId: billForm.societyId,
+        });
+      } else {
+        await apiPost("/api/maintenance/bills", {
+          type: billForm.type,
+          amount: Number(billForm.amount),
+          dueDate: billForm.dueDate,
+          residentId: billForm.residentId,
+          societyId: billForm.societyId,
+          status: billForm.status,
+          notes: billForm.notes || "",
+        });
+      }
+      await refreshDashboardData();
+      closeBillModal();
+    } catch (error) {
+      console.error("Failed to save bill", error);
+    }
   };
 
   const confirmDeleteBill = async (id) => {
     if (!window.confirm("Delete this bill?")) return;
-    const nextBills = bills.filter((item) => item.id !== id);
-    setBills(nextBills);
-    await saveDashboardState({ societies, residents, bills: nextBills, complaints, notices });
+    try {
+      await apiDelete(`/api/maintenance/bills/${id}`);
+      await refreshDashboardData();
+    } catch (error) {
+      console.error("Failed to delete bill", error);
+    }
   };
 
   const openComplaintModal = (complaint = null) => {
@@ -548,26 +602,38 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    const payload = {
-      ...complaintForm,
-      id: complaintForm.id || generateId("cmp"),
-      createdAt: complaintForm.id ? complaints.find((item) => item.id === complaintForm.id).createdAt : dateNow(),
-    };
+    try {
+      const payload = {
+        title: complaintForm.title,
+        description: complaintForm.description,
+        societyId: complaintForm.societyId,
+        residentId: complaintForm.residentId,
+        category: complaintForm.category,
+        priority: complaintForm.priority,
+        status: complaintForm.status,
+      };
 
-    const nextComplaints = complaintForm.id
-      ? complaints.map((item) => (item.id === payload.id ? payload : item))
-      : [payload, ...complaints];
-
-    setComplaints(nextComplaints);
-    await saveDashboardState({ societies, residents, bills, complaints: nextComplaints, notices });
-    closeComplaintModal();
+      if (complaintForm.id) {
+        // Editing existing complaint → use PATCH to prevent duplicate creation
+        await apiPatch(`/api/complaints/${complaintForm.id}`, payload);
+      } else {
+        await apiPost("/api/complaints", payload);
+      }
+      await refreshDashboardData();
+      closeComplaintModal();
+    } catch (error) {
+      console.error("Failed to save complaint", error);
+    }
   };
 
   const confirmDeleteComplaint = async (id) => {
     if (!window.confirm("Delete this complaint?")) return;
-    const nextComplaints = complaints.filter((item) => item.id !== id);
-    setComplaints(nextComplaints);
-    await saveDashboardState({ societies, residents, bills, complaints: nextComplaints, notices });
+    try {
+      await apiDelete(`/api/complaints/${id}`);
+      await refreshDashboardData();
+    } catch (error) {
+      console.error("Failed to delete complaint", error);
+    }
   };
 
   const openNoticeModal = (notice = null) => {
@@ -600,25 +666,41 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    const payload = {
-      ...noticeForm,
-      id: noticeForm.id || generateId("notice"),
-    };
+    try {
+      const payload = {
+        title: noticeForm.title,
+        body: noticeForm.message,
+        message: noticeForm.message,
+        target: noticeForm.target,
+        type: noticeForm.type,
+        publishDate: noticeForm.publishDate,
+        expiryDate: noticeForm.expiryDate,
+      };
+      if (noticeForm.target && noticeForm.target !== "All") {
+        payload.societyId = noticeForm.target;
+      }
 
-    const nextNotices = noticeForm.id
-      ? notices.map((item) => (item.id === payload.id ? payload : item))
-      : [payload, ...notices];
-
-    setNotices(nextNotices);
-    await saveDashboardState({ societies, residents, bills, complaints, notices: nextNotices });
-    closeNoticeModal();
+      if (noticeForm.id) {
+        // Editing existing notice → use PATCH to prevent duplicate creation
+        await apiPatch(`/api/notices/${noticeForm.id}`, payload);
+      } else {
+        await apiPost("/api/notices", payload);
+      }
+      await refreshDashboardData();
+      closeNoticeModal();
+    } catch (error) {
+      console.error("Failed to save notice", error);
+    }
   };
 
   const confirmDeleteNotice = async (id) => {
     if (!window.confirm("Delete this notice?")) return;
-    const nextNotices = notices.filter((item) => item.id !== id);
-    setNotices(nextNotices);
-    await saveDashboardState({ societies, residents, bills, complaints, notices: nextNotices });
+    try {
+      await apiDelete(`/api/notices/${id}`);
+      await refreshDashboardData();
+    } catch (error) {
+      console.error("Failed to delete notice", error);
+    }
   };
 
   return (
@@ -670,7 +752,9 @@ const AdminDashboard = ({ user }) => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
               <div style={{ fontSize: "14px", fontWeight: 700, color: COLORS.text }}>Quick Actions</div>
             </div>
-            <Button variant="primary" size="sm" style={{ width: "100%", marginBottom: "10px" }} onClick={() => openSocietyModal()}>Register New Society</Button>
+            {user?.role === "super_admin" && (
+              <Button variant="primary" size="sm" style={{ width: "100%", marginBottom: "10px" }} onClick={() => openSocietyModal()}>Register New Society</Button>
+            )}
             <Button variant="secondary" size="sm" style={{ width: "100%", marginBottom: "10px" }} onClick={() => openResidentModal()}>Add Resident</Button>
             <Button variant="secondary" size="sm" style={{ width: "100%", marginBottom: "10px" }} onClick={() => openBillModal()}>Create Bill</Button>
             <Button variant="secondary" size="sm" style={{ width: "100%", marginBottom: "10px" }} onClick={() => openComplaintModal()}>Log Complaint</Button>
@@ -719,7 +803,9 @@ const AdminDashboard = ({ user }) => {
                     <h2 style={{ fontSize: "20px", margin: 0, color: COLORS.text }}>Society Snapshot</h2>
                     <p style={{ color: COLORS.muted, marginTop: "8px" }}>Quick status and higher-level trends across the platform.</p>
                   </div>
-                  <Button variant="ghost" onClick={() => openSocietyModal()}>Register Society</Button>
+                  {user?.role === "super_admin" && (
+                    <Button variant="ghost" onClick={() => openSocietyModal()}>Register Society</Button>
+                  )}
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "720px" }}>
@@ -756,7 +842,7 @@ const AdminDashboard = ({ user }) => {
 
           {activeSection === "societies" && (
             <div style={{ display: "grid", gap: "20px" }}>
-              <SectionHeader title="Society Management" description="Create, update, delete and inspect registered societies." actionLabel="Register New Society" onAction={() => openSocietyModal()} />
+              <SectionHeader title="Society Management" description="Create, update, delete and inspect registered societies." actionLabel="Register New Society" onAction={user?.role === "super_admin" ? () => openSocietyModal() : undefined} />
               <Card>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "860px" }}>
@@ -780,7 +866,9 @@ const AdminDashboard = ({ user }) => {
                           <td style={{ padding: "14px 12px" }}>{society.registeredAt}</td>
                           <td style={{ padding: "14px 12px", display: "flex", gap: "8px" }}>
                             <Button variant="secondary" size="sm" style={{ padding: "8px 14px" }} onClick={() => openSocietyModal("edit", society)}>Edit</Button>
-                            <Button variant="ghost" size="sm" style={{ padding: "8px 14px", color: COLORS.danger }} onClick={() => confirmDeleteSociety(society.id)}>Delete</Button>
+                            {user?.role === "super_admin" && (
+                              <Button variant="ghost" size="sm" style={{ padding: "8px 14px", color: COLORS.danger }} onClick={() => confirmDeleteSociety(society.id)}>Delete</Button>
+                            )}
                           </td>
                         </tr>
                       ))}

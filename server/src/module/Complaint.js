@@ -19,7 +19,7 @@ const complaintSchema = new mongoose.Schema(
     externalId: { type: String, unique: true, sparse: true },
     category: {
       type: String,
-      enum: ["plumbing", "electrical", "security", "cleanliness", "noise", "parking", "lift", "infrastructure", "safety", "other"],
+      enum: ["plumbing", "electrical", "security", "cleanliness", "noise", "parking", "lift", "infrastructure", "safety", "services", "other"],
       required: true,
     },
     priority: {
@@ -60,12 +60,11 @@ const complaintSchema = new mongoose.Schema(
 // SLA deadlines by priority (hours)
 const SLA_HOURS = { low: 72, medium: 48, high: 24, critical: 4 };
 
-complaintSchema.pre("save", function (next) {
+complaintSchema.pre("save", async function () {
   if (this.isNew) {
     const hours = SLA_HOURS[this.priority] || 48;
     this.slaDeadline = new Date(Date.now() + hours * 60 * 60 * 1000);
   }
-  next();
 });
 
 complaintSchema.index({ society: 1, status: 1 });

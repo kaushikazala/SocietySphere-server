@@ -59,8 +59,18 @@ const authMiddleware = require("./middlewares/auth");
 // MongoDB Connection
 const mongoURI = process.env.MONGODB_URI;
 
+// Allow an escape hatch for local/dev environments where TLS validation may fail
+// Set MONGODB_TLS_INSECURE=true in your .env to allow insecure TLS (NOT for production)
+const tlsInsecure = String(process.env.MONGODB_TLS_INSECURE || "false").toLowerCase() === "true";
+
+const mongooseOptions = {
+  tls: true,
+  // When set, this will skip certificate validation. Useful for local debugging only.
+  tlsAllowInvalidCertificates: tlsInsecure,
+};
+
 mongoose
-  .connect(mongoURI)
+  .connect(mongoURI, mongooseOptions)
   .then(() => console.log("MongoDB connected successfully"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
@@ -127,6 +137,7 @@ app.use("/api/events", require("./routes/events"));
 app.use("/api/forum", require("./routes/forum"));
 app.use("/api/maintenance", require("./routes/maintenance"));
 app.use("/api/notices", require("./routes/notices"));
+app.use("/api/notes", require("./routes/notes"));
 app.use("/api/admin-dashboard", require("./routes/adminDashboard"));
 app.use("/api/parking", require("./routes/parking"));
 app.use("/api/societies", require("./routes/societies"));

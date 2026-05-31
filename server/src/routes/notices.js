@@ -7,6 +7,7 @@ router.use(protect);
 
 router.get("/", ctrl.getNotices);
 router.post("/", authorize("admin", "super_admin"), ctrl.createNotice);
+router.patch("/:id", authorize("admin", "super_admin"), ctrl.updateNotice);
 router.patch("/:id/read", ctrl.markRead);
 router.delete("/:id", authorize("admin", "super_admin"), ctrl.deleteNotice);
 

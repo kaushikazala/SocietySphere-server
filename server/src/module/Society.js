@@ -30,7 +30,7 @@ const societySchema = new mongoose.Schema(
       ],
     },
 
-    plan: { type: String, enum: ["Premium", "Standard", "Basic"], default: "Premium" },
+    plan: { type: mongoose.Schema.Types.Mixed, default: "Premium" },
     billingStatus: { type: String, enum: ["Current", "Due", "Overdue"], default: "Current" },
     status: { type: String, enum: ["Active", "Paused", "Inactive"], default: "Active" },
     adminName: String,
