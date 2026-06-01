@@ -1,5 +1,7 @@
 import React, { createContext, useState, useCallback } from "react";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -30,7 +32,7 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async (email, password, role) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, role }),
@@ -57,7 +59,7 @@ export const AuthProvider = ({ children }) => {
 
   const refreshUser = useCallback(async () => {
     try {
-      const response = await fetch("/api/auth/me", {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       const data = await parseResponse(response);
@@ -76,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   const signup = useCallback(async (userData) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/register", {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userData),
